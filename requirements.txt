@@ -2,3 +2,4 @@ shodan
 python-dotenv
 httpx
 selenium
+webdriver-manager

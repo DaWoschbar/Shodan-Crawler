@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from selenium import webdriver
 import shodan
 import os
 import httpx
@@ -33,6 +34,9 @@ async def queryRequests():
         async with httpx.AsyncClient(limits=httpx.Limits(max_connections=10)) as client:
             tasks = [fetchDevice(client, target) for target in targets]
             results = await asyncio.gather(*tasks)
+            
+            print(f'[i] Devices without result: {results.count(None)}')
+
 
     except Exception as e:
         if debug:
@@ -46,6 +50,9 @@ async def fetchDevice (client, target):
         response = await client.get(url, timeout=10)
         if response.status_code == 200:
             print(f'Success for: {url}')
+
+            # Once we have a successful hit, we should be able to take a screenshot
+            await takeScreenshot(target)
         return response.status_code
 
     except Exception as e:
@@ -53,9 +60,23 @@ async def fetchDevice (client, target):
         if debug:    
             print(f'Error fetching {url} - {e}')
 
+async def takeScreenshot(target):
+    # starting firefox in headless mode so we're not stuck with a browser window
+    options = webdriver.FirefoxOptions()
+    options.add_argument('-headless')
+    try:
+        # starting the headless browser to take a screenshot of the websites root page
+        driver = webdriver.Firefox(options)
+        driver.get(f'http://{target}')
+
+        # save the screenshot - for now it's sufficent to just save it with the ip + port
+        driver.save_screenshot(f'{target}.png')
+    except Exception as e:
+        print(f'Failed to take screenshot - {e}')
+
 
 async def main():
-    debug = 0
+    debug = 1
     queryShodanDevices()
     await queryRequests()
 

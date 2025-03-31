@@ -30,3 +30,7 @@ dist/
 .vscode/
 .idea/
 *.sublime-workspace
+
+# ignore pictures, as the script takes screenshots from found devices
+*.png
+
