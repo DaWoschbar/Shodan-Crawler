@@ -1,8 +1,6 @@
 from dotenv import load_dotenv
 import shodan
 import os
-import requests
-
 import httpx
 import asyncio
 

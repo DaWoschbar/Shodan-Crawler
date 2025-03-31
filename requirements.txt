@@ -1,0 +1,4 @@
+shodan
+python-dotenv
+httpx
+selenium
