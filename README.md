@@ -18,6 +18,11 @@ Do not forget to add your shodan API-Key
 echo 'API_KEY=XXX' > .env
 ```
 
+## Sidenote
+As for now, even though the webdriver manger should handle all of the geckodriver dependencies, the script still requires a locally installede firefox instance. It's a known issue, the current workaround is to install firefox
+```
+sudo apt install firefox
+```
 
 # ToDo's
 
