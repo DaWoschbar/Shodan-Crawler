@@ -34,3 +34,4 @@ dist/
 # ignore pictures, as the script takes screenshots from found devices
 *.png
 
+pyvenv.cfg
