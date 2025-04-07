@@ -10,8 +10,11 @@ import json
 # load the secrets from the .env file
 load_dotenv()
 api_key = os.getenv("API_KEY")
+
+# saving paths for data collection
 screenshotPath = './screenshots/'
-datePath = f'{screenshotPath}{datetime.today().strftime("%Y%m%d")}'
+datePath = f'{screenshotPath}{datetime.today().strftime("%Y%m%d")}' 
+vendorPath = ''
 countries = 'DE' # 'AT,DE,CH'
 vendors = ['tasmota', 'openhab', 'shelly'] 
 debug = 0
@@ -19,12 +22,19 @@ debug = 0
 targets = []
 targetsAll = []
 
-def createFolderStructure():
+def createFolderStructure(vendor):
+
+    global vendorPath
+    vendorPath = f'{datePath}/{vendor}'
+
     if not os.path.exists(screenshotPath):
         os.makedirs(screenshotPath)
     
     if not os.path.exists(datePath):
         os.makedirs(datePath)
+    
+    if not os.path.exists(vendorPath):
+        os.makedirs(vendorPath)
 
 def queryShodanDevices(vendor):
         # Connecting to shodan using the API-Key
@@ -35,6 +45,9 @@ def queryShodanDevices(vendor):
         print(f'[i] Currently searching for: {query}')
         # Limit search results to 1 pages - currently only for developing purposes
         results = api.search(query, 1)
+
+        # Clearing the targets list in order to have a clean list per vendor
+        targets.clear
         targetsAll.append(results)
 
         # go through the matches and save the ip + port for later asynchronmotor requests
@@ -85,7 +98,7 @@ async def takeScreenshot(target):
         driver.get(f'http://{target}')
 
         # save the screenshot - for now it's sufficent to just save it with the ip + port
-        path = f'{datePath}/{target}.png'
+        path = f'{vendorPath}/{target}.png'
         driver.save_screenshot(path)
         driver.quit
     except Exception as e:
@@ -101,7 +114,7 @@ async def main():
     debug = 1
 
     for vendor in vendors:
-        createFolderStructure()
+        createFolderStructure(vendor)
         queryShodanDevices(vendor)
         await queryRequests()
     saveDataToJSON()
