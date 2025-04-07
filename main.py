@@ -5,6 +5,7 @@ import shodan
 import os
 import httpx
 import asyncio
+import json
 
 # load the secrets from the .env file
 load_dotenv()
@@ -12,10 +13,11 @@ api_key = os.getenv("API_KEY")
 screenshotPath = './screenshots/'
 datePath = f'{screenshotPath}{datetime.today().strftime("%Y%m%d")}'
 countries = 'DE' # 'AT,DE,CH'
-products = 'tasmota' #
+vendors = ['tasmota', 'openhab', 'shelly'] 
 debug = 0
 
 targets = []
+targetsAll = []
 
 def createFolderStructure():
     if not os.path.exists(screenshotPath):
@@ -24,15 +26,16 @@ def createFolderStructure():
     if not os.path.exists(datePath):
         os.makedirs(datePath)
 
-def queryShodanDevices():
+def queryShodanDevices(vendor):
         # Connecting to shodan using the API-Key
         api = shodan.Shodan(api_key)
         # Query shodan for the given country and product
-        query = f'country:{countries} {products}'
+        query = f'country:{countries} {vendor}'
 
         print(f'[i] Currently searching for: {query}')
-        # Limit search results to 5 pages - currently only for developing purposes
-        results = api.search(query, 5)
+        # Limit search results to 1 pages - currently only for developing purposes
+        results = api.search(query, 1)
+        targetsAll.append(results)
 
         # go through the matches and save the ip + port for later asynchronmotor requests
         for service in results['matches']:
@@ -51,7 +54,6 @@ async def queryRequests():
     except Exception as e:
         if debug:
             print(f'Something unexepected happend! \n {e}')
-
 
 async def fetchDevice (client, target):
     try:
@@ -85,16 +87,22 @@ async def takeScreenshot(target):
         # save the screenshot - for now it's sufficent to just save it with the ip + port
         path = f'{datePath}/{target}.png'
         driver.save_screenshot(path)
+        driver.quit
     except Exception as e:
         print(f'Failed to take screenshot - {e}')
 
-
-
+def saveDataToJSON():
+    # saving all the collected data from each vendor in the json file just to have the data
+    path = f'{datePath}/data.json'
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(targetsAll, f, ensure_ascii=False, indent=4)
 
 async def main():
     debug = 1
-    createFolderStructure()
-    queryShodanDevices()
-    await queryRequests()
 
+    for vendor in vendors:
+        createFolderStructure()
+        queryShodanDevices(vendor)
+        await queryRequests()
+    saveDataToJSON()
 asyncio.run(main())
