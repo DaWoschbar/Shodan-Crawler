@@ -6,24 +6,22 @@ import os
 import httpx
 import asyncio
 import json
+import requests
 
 # load the secrets from the .env file
 load_dotenv()
 api_key = os.getenv("API_KEY")
+debug = 0
 
 # saving paths for data collection
 screenshotPath = './screenshots/'
 datePath = f'{screenshotPath}{datetime.today().strftime("%Y%m%d")}' 
 vendorPath = ''
 countries = 'DE' # 'AT,DE,CH'
-vendors = ['tasmota', 'openhab', 'shelly'] 
-debug = 0
-
-targets = []
-targetsAll = []
+vendors = ['tasmota', 'openhab']#, 'openhab', 'shelly'] 
 
 def createFolderStructure(vendor):
-
+    # defining a global var to save the path for each vendor
     global vendorPath
     vendorPath = f'{datePath}/{vendor}'
 
@@ -44,40 +42,49 @@ def queryShodanDevices(vendor):
 
         print(f'[i] Currently searching for: {query}')
         # Limit search results to 1 pages - currently only for developing purposes
-        results = api.search(query, 1)
+        result = api.search(query, 1)
+        return result['matches']
 
-        # Clearing the targets list in order to have a clean list per vendor
-        targets.clear
-        targetsAll.append(results)
+def queryRequests(matches):
 
-        # go through the matches and save the ip + port for later asynchronmotor requests
-        for service in results['matches']:
-            targets.append(f"{service['ip_str']}:{service['port']}")
-
-async def queryRequests():
     try:
         # Creating async-client to to through the found ip + port with limited connections
-        async with httpx.AsyncClient(limits=httpx.Limits(max_connections=10)) as client:
-            tasks = [fetchDevice(client, target) for target in targets]
-            results = await asyncio.gather(*tasks)
-            
-            print(f'[i] Devices without result: {results.count(None)}')
+        
+        successfulTargets = []
+        counter = 0
+        for match in matches:
+            if counter > 5:
+                return successfulTargets
+            else:
+                counter += 1
 
+            try:
+                target = f'{match['ip_str']}:{match['port']}'
+                responseCode = fetchTarget(target)
+
+                if responseCode == 200:
+                    successfulTargets.append(match)
+            except:
+                continue
+
+        return successfulTargets
 
     except Exception as e:
         if debug:
             print(f'Something unexepected happend! \n {e}')
 
-async def fetchDevice (client, target):
+def fetchTarget (target):
     try:
         # trying to fetch found target
+
         url = f'http://{target}'
-        response = await client.get(url, timeout=10)
+
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             print(f'Success for: {url}')
 
             # Once we have a successful hit, we should be able to take a screenshot
-            await takeScreenshot(target)
+            takeScreenshot(target)
         return response.status_code
 
     except Exception as e:
@@ -85,13 +92,10 @@ async def fetchDevice (client, target):
         if debug:    
             print(f'Error fetching {url} - {e}')
 
-async def takeScreenshot(target):
+def takeScreenshot(target):
     # starting firefox in headless mode so we're not stuck with a browser window
     options = webdriver.FirefoxOptions()
     options.add_argument('-headless')
-
-    # TO BE TESTED - Ignore all cert issues, as most devices only have self signed certificates 
-    # options.accept_insecure_certs = True
     try:
         # starting the headless browser to take a screenshot of the websites root page
         driver = webdriver.Firefox(options)
@@ -104,18 +108,24 @@ async def takeScreenshot(target):
     except Exception as e:
         print(f'Failed to take screenshot - {e}')
 
-def saveDataToJSON():
+def saveDataToJSON(successfulTargets):
     # saving all the collected data from each vendor in the json file just to have the data
     path = f'{datePath}/data.json'
     with open(path, 'w', encoding='utf-8') as f:
-        json.dump(targetsAll, f, ensure_ascii=False, indent=4)
+        json.dump(successfulTargets, f, ensure_ascii=False, indent=4)
 
-async def main():
+
+
+
+def  main():
     debug = 1
+    successfulTargets = []
 
     for vendor in vendors:
         createFolderStructure(vendor)
-        queryShodanDevices(vendor)
-        await queryRequests()
-    saveDataToJSON()
-asyncio.run(main())
+        matches = queryShodanDevices(vendor)
+        successfulTargets.append(queryRequests(matches))
+
+    saveDataToJSON(successfulTargets)
+#asyncio.run(main())
+main()
