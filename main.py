@@ -51,18 +51,24 @@ async def queryRequests(matches):
         # Creating async-client to to through the found ip + port with limited connections
         targets = []
         successfulTargets = []
-        counter = 0
+
+        # create a list for asyncClient to go through all the gathered hosts
+        # in the format ip + port
         for match in matches:
             targets.append(f'{match['ip_str']}:{match['port']}')
 
         try:
+            # execute async function to fetch the client
             async with httpx.AsyncClient(limits=httpx.Limits(max_connections=10)) as client:
                 tasks = [fetchTarget(client, target) for target in targets]
+                # all successfully connected targets are returned here
                 connectedTarget = await asyncio.gather(*tasks)
         
         except Exception as e:
             print(f'An error occured while connecting {e}')
 
+        # Go through all matches and compare them with the successful targets
+        # if any match, save them including all of their fields in a new list
         for match in matches:
             if match['ip_str'] in connectedTarget:
                 successfulTargets.append(match) 
@@ -76,7 +82,6 @@ async def queryRequests(matches):
 async def fetchTarget (client, target):
     try:
         # trying to fetch found target
-
         url = f'http://{target}'
 
         response = await client.get(url, timeout=10)
@@ -86,6 +91,7 @@ async def fetchTarget (client, target):
             # Once we have a successful hit, we should be able to take a screenshot
             takeScreenshot(target)
             
+            # split the target so that we can create a list of just the successful ip adresses
             ip = target.split(':')[0]
             return ip
 
@@ -111,7 +117,7 @@ def takeScreenshot(target):
         print(f'Failed to take screenshot - {e}')
 
 def saveDataToJSON(successfulTargets):
-    # saving all the collected data from each vendor in the json file just to have the data
+    # saving all the collected data in a json file just to have the data for later analysis
     path = f'{datePath}/data.json'
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(successfulTargets, f, ensure_ascii=False, indent=4)
@@ -127,4 +133,3 @@ async def main():
 
     saveDataToJSON(successfulTargets)
 asyncio.run(main())
-#main()
