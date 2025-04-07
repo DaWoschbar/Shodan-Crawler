@@ -12,7 +12,7 @@ api_key = os.getenv("API_KEY")
 screenshotPath = './screenshots/'
 datePath = f'{screenshotPath}{datetime.today().strftime("%Y%m%d")}'
 countries = 'DE' # 'AT,DE,CH'
-products = 'tasmota'
+products = 'tasmota' #
 debug = 0
 
 targets = []
@@ -83,7 +83,8 @@ async def takeScreenshot(target):
         driver.get(f'http://{target}')
 
         # save the screenshot - for now it's sufficent to just save it with the ip + port
-        driver.save_screenshot(f'{datePath}{target}.png')
+        path = f'{datePath}/{target}.png'
+        driver.save_screenshot(path)
     except Exception as e:
         print(f'Failed to take screenshot - {e}')
 
