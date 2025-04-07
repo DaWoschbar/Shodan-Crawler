@@ -53,11 +53,7 @@ async def queryRequests(matches):
         successfulTargets = []
         counter = 0
         for match in matches:
-            if counter > 5:
-                break
-            else:
-                counter += 1
-                targets.append(f'{match['ip_str']}:{match['port']}')
+            targets.append(f'{match['ip_str']}:{match['port']}')
 
         try:
             async with httpx.AsyncClient(limits=httpx.Limits(max_connections=10)) as client:
@@ -119,9 +115,6 @@ def saveDataToJSON(successfulTargets):
     path = f'{datePath}/data.json'
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(successfulTargets, f, ensure_ascii=False, indent=4)
-
-
-
 
 async def main():
     debug = 1
