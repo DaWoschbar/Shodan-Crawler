@@ -31,9 +31,9 @@ sudo apt-get install libgtk-3-0 libdbus-glib-1-2 libx11-xcb1 libasound2 libatk1.
 
 # ToDo's
 
-- [x] Make the requests async to guarantee better performance
-- [ ] Check for SSL issues (and ignore them)
+- [] Make the requests async to guarantee better performance
+- [x] Check for SSL issues (and ignore them)
 - [ ] Pretty output
-- [ ] Save all the data in a meaningful output such as a JSON 
+- [x] Save all the data in a meaningful output such as a JSON 
 - [x] Make automated screenshots using something like selenium
 - [ ] Refactor Code
