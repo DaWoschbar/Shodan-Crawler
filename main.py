@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 from selenium import webdriver
+from datetime import datetime
 import shodan
 import os
 import httpx
@@ -8,11 +9,20 @@ import asyncio
 # load the secrets from the .env file
 load_dotenv()
 api_key = os.getenv("API_KEY")
+screenshotPath = './screenshots/'
+datePath = f'{screenshotPath}{datetime.today().strftime("%Y%m%d")}'
 countries = 'DE' # 'AT,DE,CH'
 products = 'tasmota'
 debug = 0
 
 targets = []
+
+def createFolderStructure():
+    if not os.path.exists(screenshotPath):
+        os.makedirs(screenshotPath)
+    
+    if not os.path.exists(datePath):
+        os.makedirs(datePath)
 
 def queryShodanDevices():
         # Connecting to shodan using the API-Key
@@ -64,19 +74,25 @@ async def takeScreenshot(target):
     # starting firefox in headless mode so we're not stuck with a browser window
     options = webdriver.FirefoxOptions()
     options.add_argument('-headless')
+
+    # TO BE TESTED - Ignore all cert issues, as most devices only have self signed certificates 
+    # options.accept_insecure_certs = True
     try:
         # starting the headless browser to take a screenshot of the websites root page
         driver = webdriver.Firefox(options)
         driver.get(f'http://{target}')
 
         # save the screenshot - for now it's sufficent to just save it with the ip + port
-        driver.save_screenshot(f'{target}.png')
+        driver.save_screenshot(f'{datePath}{target}.png')
     except Exception as e:
         print(f'Failed to take screenshot - {e}')
 
 
+
+
 async def main():
     debug = 1
+    createFolderStructure()
     queryShodanDevices()
     await queryRequests()
 
