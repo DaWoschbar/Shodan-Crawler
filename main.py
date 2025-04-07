@@ -18,7 +18,7 @@ screenshotPath = './screenshots/'
 datePath = f'{screenshotPath}{datetime.today().strftime("%Y%m%d")}' 
 vendorPath = ''
 countries = 'DE' # 'AT,DE,CH'
-vendors = ['tasmota', 'openhab']#, 'openhab', 'shelly'] 
+vendors = ['tasmota']#, 'openhab']#, 'openhab', 'shelly'] 
 
 def createFolderStructure(vendor):
     # defining a global var to save the path for each vendor
@@ -45,27 +45,31 @@ def queryShodanDevices(vendor):
         result = api.search(query, 1)
         return result['matches']
 
-def queryRequests(matches):
+async def queryRequests(matches):
 
     try:
         # Creating async-client to to through the found ip + port with limited connections
-        
+        targets = []
         successfulTargets = []
         counter = 0
         for match in matches:
             if counter > 5:
-                return successfulTargets
+                break
             else:
                 counter += 1
+                targets.append(f'{match['ip_str']}:{match['port']}')
 
-            try:
-                target = f'{match['ip_str']}:{match['port']}'
-                responseCode = fetchTarget(target)
+        try:
+            async with httpx.AsyncClient(limits=httpx.Limits(max_connections=10)) as client:
+                tasks = [fetchTarget(client, target) for target in targets]
+                connectedTarget = await asyncio.gather(*tasks)
+        
+        except Exception as e:
+            print(f'An error occured while connecting {e}')
 
-                if responseCode == 200:
-                    successfulTargets.append(match)
-            except:
-                continue
+        for match in matches:
+            if match['ip_str'] in connectedTarget:
+                successfulTargets.append(match) 
 
         return successfulTargets
 
@@ -73,19 +77,21 @@ def queryRequests(matches):
         if debug:
             print(f'Something unexepected happend! \n {e}')
 
-def fetchTarget (target):
+async def fetchTarget (client, target):
     try:
         # trying to fetch found target
 
         url = f'http://{target}'
 
-        response = requests.get(url, timeout=10)
+        response = await client.get(url, timeout=10)
         if response.status_code == 200:
             print(f'Success for: {url}')
 
             # Once we have a successful hit, we should be able to take a screenshot
             takeScreenshot(target)
-        return response.status_code
+            
+            ip = target.split(':')[0]
+            return ip
 
     except Exception as e:
         # The crawl can fail for various reasons such as timeout, unavailability, read errors, etc.
@@ -117,15 +123,15 @@ def saveDataToJSON(successfulTargets):
 
 
 
-def  main():
+async def main():
     debug = 1
     successfulTargets = []
 
     for vendor in vendors:
         createFolderStructure(vendor)
         matches = queryShodanDevices(vendor)
-        successfulTargets.append(queryRequests(matches))
+        successfulTargets.append(await queryRequests(matches))
 
     saveDataToJSON(successfulTargets)
-#asyncio.run(main())
-main()
+asyncio.run(main())
+#main()
