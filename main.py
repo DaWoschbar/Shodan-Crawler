@@ -17,7 +17,17 @@ screenshotPath = './screenshots/'
 datePath = f'{screenshotPath}{datetime.today().strftime("%Y%m%d")}' 
 vendorPath = ''
 countries = 'AT,DE,CH'
-vendors = ['tasmota', 'openhab', 'shelly'] 
+"""
+Vendors that bring useful results in shodan
+- Node-RED          -> meh results
+- Tasmota           -> gives results, but it's almost always the same, a lot of default settings
+- Homebridge        -> Node.js server emulating appe homekit API
+- Home Assistant    -> Mostly good results
+- Domoticz          -> Rarely ever something else than a login mask
+- openhab           -> Great results, lot to show
+- shelly            -> Mostly good results
+"""
+vendors = ['Home Assistant', 'Homebridge', 'openhab', 'shelly'] 
 allTargets = []
 
 def createFolderStructure(vendor):
@@ -54,28 +64,31 @@ async def queryRequests(matches):
         # Creating async-client to to through the found ip + port with limited connections
         successfulTargets = []
 
-        # create a list for asyncClient to go through all the gathered hosts
-        # in the format ip + port
-        for match in matches:
-            targets.append(f'{match['ip_str']}:{match['port']}')
+        # Check if any matches from a vendor are emtpy 
+        if len(matches) != 0:
+            for match in matches:
+                targets.append(f'{match['ip_str']}:{match['port']}')
 
-        try:
-            # execute async function to fetch the client
-            async with httpx.AsyncClient(limits=httpx.Limits(max_connections=10)) as client:
-                tasks = [fetchTarget(client, target) for target in targets]
-                # all successfully connected targets are returned here
-                connectedTarget = await asyncio.gather(*tasks)
+            try:
+                # execute async function to fetch the client
+                async with httpx.AsyncClient(limits=httpx.Limits(max_connections=10)) as client:
+                    tasks = [fetchTarget(client, target) for target in targets]
+                    # all successfully connected targets are returned here
+                    connectedTarget = await asyncio.gather(*tasks)
+            
+            except Exception as e:
+                print(f'An error occured while connecting {e}')
+
+            # Go through all matches and compare them with the successful targets
+            # if any match, save them including all of their fields in a new list
+            for match in matches:
+                if match['ip_str'] in connectedTarget:
+                    successfulTargets.append(match) 
+            return successfulTargets
         
-        except Exception as e:
-            print(f'An error occured while connecting {e}')
-
-        # Go through all matches and compare them with the successful targets
-        # if any match, save them including all of their fields in a new list
-        for match in matches:
-            if match['ip_str'] in connectedTarget:
-                successfulTargets.append(match) 
-
-        return successfulTargets
+        else:
+            print('No devices found for current vendor!')
+            return matches
 
     except Exception as e:
         if debug:
@@ -129,13 +142,24 @@ def saveDataToJSON(successfulTargets, filename):
 
 async def main():
     global allTargets    
-    successfulTargets = []
+    successfulTargets = []    
+    
+    successfulCount = 0
+    unreachableCount = 0
 
     for vendor in vendors:
         createFolderStructure(vendor)
         matches = queryShodanDevices(vendor)
         allTargets = matches
-        successfulTargets.append(await queryRequests(matches))
+        currTargets = await queryRequests(matches)
+        successfulTargets.append(currTargets)
+
+        successfulCount += len(currTargets)
+        unreachableCount += len(matches) - successfulCount
+
+
+    print(f'Devices reached: {successfulCount}')
+    print(f'Unreachable devices: {unreachableCount}')
 
     saveDataToJSON(successfulTargets, 'successdata.json')
     saveDataToJSON(allTargets, 'all_data.json')
