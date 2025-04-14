@@ -27,7 +27,7 @@ Vendors that bring useful results in shodan
 - openhab           -> Great results, lot to show
 - shelly            -> Mostly good results
 """
-vendors = ['Home Assistant', 'Homebridge', 'openhab', 'shelly'] 
+vendors = ['Home Assistant', 'Homebridge']#, 'openhab', 'shelly'] 
 allTargets = []
 
 def createFolderStructure(vendor):
@@ -127,7 +127,7 @@ def takeScreenshot(target):
         # save the screenshot - for now it's sufficent to just save it with the ip + port
         path = f'{vendorPath}/{target}.png'
         driver.save_screenshot(path)
-        driver.quit
+        driver.quit()
     except Exception as e:
         print(f'Failed to take screenshot - {e}')
 
@@ -141,22 +141,31 @@ def saveDataToJSON(successfulTargets, filename):
         print(f'Something went wrong while creaing {filename}! {e}')
 
 async def main():
-    global allTargets    
+    allTargets = []    
     successfulTargets = []    
     
     successfulCount = 0
     unreachableCount = 0
 
     for vendor in vendors:
-        createFolderStructure(vendor)
-        matches = queryShodanDevices(vendor)
-        allTargets = matches
-        currTargets = await queryRequests(matches)
-        successfulTargets.append(currTargets)
+        try:
+            # Preparing the folder structure for day of execution
+            createFolderStructure(vendor)
 
-        successfulCount += len(currTargets)
-        unreachableCount += len(matches) - successfulCount
+            # get the matches per vendor - shodan usually caps the matches at 100
+            matches = queryShodanDevices(vendor)
+            # save all the data we get from shodan in a list to create a json later on
+            allTargets.append(matches)
+            # Query all the targets to check if we would get a successful connection
+            currTargets = await queryRequests(matches)
+            # save all the data from the successful connection in a list to create a json later on
+            successfulTargets.append(currTargets)
 
+            # Keep track of all successful / unsucessful connections
+            successfulCount += len(currTargets)
+            unreachableCount += (len(matches) - successfulCount)
+        except Exception as e:
+            print(f'Something went wrong: {e}')
 
     print(f'Devices reached: {successfulCount}')
     print(f'Unreachable devices: {unreachableCount}')
