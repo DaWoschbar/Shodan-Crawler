@@ -6,7 +6,6 @@ import os
 import httpx
 import asyncio
 import json
-import requests
 
 # load the secrets from the .env file
 load_dotenv()
@@ -17,8 +16,19 @@ debug = 0
 screenshotPath = './screenshots/'
 datePath = f'{screenshotPath}{datetime.today().strftime("%Y%m%d")}' 
 vendorPath = ''
-countries = 'DE' # 'AT,DE,CH'
-vendors = ['tasmota']#, 'openhab']#, 'openhab', 'shelly'] 
+countries = 'AT,DE,CH'
+"""
+Vendors that bring useful results in shodan
+- Node-RED          -> meh results
+- Tasmota           -> gives results, but it's almost always the same, a lot of default settings
+- Homebridge        -> Node.js server emulating appe homekit API
+- Home Assistant    -> Mostly good results
+- Domoticz          -> Rarely ever something else than a login mask
+- openhab           -> Great results, lot to show
+- shelly            -> Mostly good results
+"""
+vendors = ['Home Assistant', 'Homebridge', 'openhab', 'shelly'] 
+allTargets = []
 
 def createFolderStructure(vendor):
     # defining a global var to save the path for each vendor
@@ -36,44 +46,49 @@ def createFolderStructure(vendor):
 
 def queryShodanDevices(vendor):
         # Connecting to shodan using the API-Key
-        api = shodan.Shodan(api_key)
-        # Query shodan for the given country and product
-        query = f'country:{countries} {vendor}'
+        try:
+            api = shodan.Shodan(api_key)
+            # Query shodan for the given country and product
+            query = f'country:{countries} {vendor}'
 
-        print(f'[i] Currently searching for: {query}')
-        # Limit search results to 1 pages - currently only for developing purposes
-        result = api.search(query, 1)
-        return result['matches']
+            print(f'[i] Currently searching for: {query}')
+            result = api.search(query)
+            return result['matches']
+        except Exception as e:
+            print(f'Something went wrong while trying to connect to the Shodan API. {e}')
 
 async def queryRequests(matches):
 
     try:
-        # Creating async-client to to through the found ip + port with limited connections
         targets = []
+        # Creating async-client to to through the found ip + port with limited connections
         successfulTargets = []
 
-        # create a list for asyncClient to go through all the gathered hosts
-        # in the format ip + port
-        for match in matches:
-            targets.append(f'{match['ip_str']}:{match['port']}')
+        # Check if any matches from a vendor are emtpy 
+        if len(matches) != 0:
+            for match in matches:
+                targets.append(f'{match['ip_str']}:{match['port']}')
 
-        try:
-            # execute async function to fetch the client
-            async with httpx.AsyncClient(limits=httpx.Limits(max_connections=10)) as client:
-                tasks = [fetchTarget(client, target) for target in targets]
-                # all successfully connected targets are returned here
-                connectedTarget = await asyncio.gather(*tasks)
+            try:
+                # execute async function to fetch the client
+                async with httpx.AsyncClient(limits=httpx.Limits(max_connections=10)) as client:
+                    tasks = [fetchTarget(client, target) for target in targets]
+                    # all successfully connected targets are returned here
+                    connectedTarget = await asyncio.gather(*tasks)
+            
+            except Exception as e:
+                print(f'An error occured while connecting {e}')
+
+            # Go through all matches and compare them with the successful targets
+            # if any match, save them including all of their fields in a new list
+            for match in matches:
+                if match['ip_str'] in connectedTarget:
+                    successfulTargets.append(match) 
+            return successfulTargets
         
-        except Exception as e:
-            print(f'An error occured while connecting {e}')
-
-        # Go through all matches and compare them with the successful targets
-        # if any match, save them including all of their fields in a new list
-        for match in matches:
-            if match['ip_str'] in connectedTarget:
-                successfulTargets.append(match) 
-
-        return successfulTargets
+        else:
+            print('No devices found for current vendor!')
+            return matches
 
     except Exception as e:
         if debug:
@@ -116,20 +131,37 @@ def takeScreenshot(target):
     except Exception as e:
         print(f'Failed to take screenshot - {e}')
 
-def saveDataToJSON(successfulTargets):
+def saveDataToJSON(successfulTargets, filename):
     # saving all the collected data in a json file just to have the data for later analysis
-    path = f'{datePath}/data.json'
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(successfulTargets, f, ensure_ascii=False, indent=4)
+    try:
+        path = f'{datePath}/{filename}'
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(successfulTargets, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f'Something went wrong while creaing {filename}! {e}')
 
 async def main():
-    debug = 1
-    successfulTargets = []
+    global allTargets    
+    successfulTargets = []    
+    
+    successfulCount = 0
+    unreachableCount = 0
 
     for vendor in vendors:
         createFolderStructure(vendor)
         matches = queryShodanDevices(vendor)
-        successfulTargets.append(await queryRequests(matches))
+        allTargets = matches
+        currTargets = await queryRequests(matches)
+        successfulTargets.append(currTargets)
 
-    saveDataToJSON(successfulTargets)
+        successfulCount += len(currTargets)
+        unreachableCount += len(matches) - successfulCount
+
+
+    print(f'Devices reached: {successfulCount}')
+    print(f'Unreachable devices: {unreachableCount}')
+
+    saveDataToJSON(successfulTargets, 'successdata.json')
+    saveDataToJSON(allTargets, 'all_data.json')
+    
 asyncio.run(main())
