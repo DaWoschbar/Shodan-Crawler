@@ -27,7 +27,7 @@ Vendors that bring useful results in shodan
 - openhab           -> Great results, lot to show
 - shelly            -> Mostly good results
 """
-vendors = ['Home Assistant', 'Homebridge']#, 'openhab', 'shelly'] 
+vendors = ['Home Assistant', 'Homebridge', 'openhab', 'shelly'] 
 allTargets = []
 
 def createFolderStructure(vendor):
